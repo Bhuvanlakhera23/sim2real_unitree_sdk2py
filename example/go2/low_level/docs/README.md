@@ -1,4 +1,4 @@
-
+```
 # Go2 Low-Level Control Stack (Simulation + Deployment)
 
 > ⚠️ **Research Sandbox — Use at Your Own Risk**  
@@ -10,43 +10,49 @@
 
 ## 1. Overview
 
-This directory contains a **hardware-aligned low-level control pipeline** for the **Unitree Go2**, including:
+This directory contains a **hardware-aligned low-level control pipeline** for the **Unitree Go2**, designed for **sim-to-real locomotion research**.
 
-- MuJoCo-based simulation
-- Reinforcement learning policy inference
-- Safe deployment via **joint position PD control**
+It includes:
+
+- MuJoCo-based simulation with policy inference
+- Legacy Isaac Gym–based validation scripts
+- Safe hardware deployment via **joint position PD control**
 - CSV-based logging for debugging and gait inspection
 
-This stack is intended for **researchers and engineers** working on sim-to-real locomotion, not for production or consumer use.
+This stack is intended for **researchers and engineers**, not for production or consumer use.
 
 ---
 
-## 2. Supported Scope & Limitations
+## 2. Repository Scope & Ownership
 
-This repository contains:
+This repository contains **two distinct components**:
 
 1. **Unitree SDK2 Python source code and official examples**
    - Located under `unitree_sdk2py/` and `example/`
    - Copyright © Unitree Robotics
+   - Largely unmodified vendor code
 
 2. **Custom Go2 sim-to-real research stack**
    - Located under `example/go2/low_level/`
-   - Developed for reinforcement learning based locomotion research
-   - Not part of the official Unitree SDK
+   - Developed specifically for RL-based locomotion research
+   - **Not part of the official Unitree SDK**
 
-Only the Go2 low-level stack is actively developed in this repository.
+Only the **Go2 low-level stack** is actively developed and maintained here.
 
+---
+
+## 3. Supported Scope & Limitations
 
 ### Supported
 - ✅ Unitree **Go2 only**
 - ✅ MuJoCo simulation
-- ✅ IsaacGym simulation
-- ✅ Joint position PD control
-- ✅ Pretrained locomotion policy (`policy_v1.pt`)
+- ✅ Legacy Isaac Gym validation (see notes below)
+- ✅ Joint position PD control on hardware
+- ✅ TorchScript policy inference
 - ✅ CSV logging for pose and gait inspection
 
 ### Not Supported
-- ❌ Policy training (IsaacLab / IsaacGym not covered here)
+- ❌ Policy training (Isaac Gym / Isaac Lab training pipelines not included)
 - ❌ Torque control on hardware
 - ❌ Other robots or morphologies
 - ❌ Automatic recovery or fall detection
@@ -54,136 +60,177 @@ Only the Go2 low-level stack is actively developed in this repository.
 
 ---
 
-## 3. Directory Structure (Relevant Subset)
+## 4. Directory Structure (Relevant Subset)
+
 ```
+
 low_level/
-├── common/                  # Shared helpers (paths, constants, math)
+├── common/                  # Shared helpers (paths, math, controller utilities)
 ├── config/
 │   ├── sim/v1/              # MuJoCo simulation YAMLs
 │   └── deploy/v1/           # Hardware deployment YAMLs
 ├── simulate/
-│   └── mujoco/v1/           # MuJoCo simulation scripts + assets
+│   ├── mujoco/v1/           # MuJoCo simulation scripts + assets
+│   └── gym/v1/              # Legacy Isaac Gym validation scripts
 ├── deploy/
 │   └── v1/                  # Hardware deployment scripts
 ├── debug/                   # Policy inspection, mode switching
-├── policies/
-│   └── policy_v1.pt         # Pretrained locomotion policy
+├── policies/                # Policy artifacts (NOT tracked in git)
 ├── plots/
 │   ├── sim_op/              # Simulation logs & plots
 │   └── real_op/             # Hardware logs (if enabled)
+├── docs/
+│   ├── README.md            # This document
+│   └── policy_contract.md   # Immutable policy interface specification
+
 ```
 
 ---
 
-## 4. Versioning Philosophy
+## 5. Versioning Philosophy
 
 - **v1.0**  
-  First working version for a given policy.
+  First working deployment for a given policy interface.
 
 - **v1.1**  
-  Same control logic as v1.0, **adds CSV logging only**.
+  Same control logic as v1.0, **adds logging only**.
 
 - **v2.x (future)**  
-  Reserved for **newly trained policies**.
+  Reserved for **newly trained policies with new contracts**.
 
-> All `v1.x` scripts are compatible with `policy_v1.pt`.
-
----
-
-## 5. Policy Contract (Critical)
-
-### 5.1 Policy Architecture
-
-- Type: **MLP (no recurrence)**
-- Input dimension: **48**
-- Output dimension: **12**
-- Output range: **unbounded (no tanh / clamp)**
-
-### 5.2 What the Policy Outputs
-
-The policy outputs a **12-D continuous vector** with torque-like statistics:
-
-- Mean ≈ −0.56  
-- Std ≈ 2.05  
-- Max |value| ≈ 4.73  
-
-However:
-
-> **Torque is never directly commanded.**
+> All `v1.x` scripts are compatible with the **v1 policy interface**,  
+> not with a specific policy filename.
 
 ---
 
-### 5.3 Deployment-Time Interpretation
+## 6. Policy Contract (CRITICAL)
 
-During both simulation and hardware deployment, the policy output is **reinterpreted** as:
+The **policy interface is immutable**.
+
+See:  
+```
+
+docs/policy_contract.md
 
 ```
+
+This document defines:
+- Observation layout and normalization
+- Action semantics
+- Timing assumptions
+- Default pose reference
+
+Any mismatch between **code** and **contract** invalidates the policy.
+
+---
+
+## 7. Policy Semantics (Summary)
+
+- **Observation dimension:** 48  
+- **Action dimension:** 12  
+- **Action meaning:** Δ joint position offsets  
+- **Control mode:** Joint position PD (policy is PD-agnostic)
+
+Final target computation (sim & real):
+
+```
+
 target_q = default_angles + action * action_scale
+
 ```
 
-Where:
-- `action` is clipped to `[-1, 1]`
-- `action_scale` is defined in YAML
-- `default_angles` define the standing posture
-
-The resulting joint targets are tracked using **joint position PD control**.
-
-⚠️ **Important:**  
-This interpretation is a **deployment safety choice**, not something the policy was trained for.
+### Important Notes
+- The policy **does not output torques**
+- PD gains are applied **outside** the policy
+- Hardware deployment **does not enforce action clipping**
+  - Safety relies on `action_scale` and PD gains
+- A neutral-action bias is subtracted at deployment time
+  to compensate for posture bias in torque-trained policies
 
 ---
 
-## 6. Control Architecture (Sim & Real)
+## 8. Control Architecture (Sim & Real)
+
 ```
+
 Observations (48D)
 ↓
-RL Policy (MLP)
+RL Policy (MLP, TorchScript)
 ↓
-Clipping + Scaling
+Optional safety transforms (deployment-specific)
 ↓
-Joint Target Positions
+Joint target positions
 ↓
-PD Controller
+PD controller
 ↓
-Motor Torques (implicit)
+Motor torques (implicit)
+
 ```
 
-- No direct torque commands
+- No direct torque commands are issued
 - PD loop exists **outside** the policy
-- PD gains are fully configurable via YAML
+- PD gains are configurable via YAML
 
 ---
 
-## 7. MuJoCo Simulation
+## 9. MuJoCo Simulation
 
 ### Primary Script
 ```
+
 simulate/mujoco/v1/sim_walk_v1.0.py
+
 ```
 
-### Experimental (Logging Only)
+### Experimental (Adds Logging Only)
 ```
+
 simulate/mujoco/v1/sim_walk_v1.1.py
-```
+
+````
 
 ### Run
 ```
 cd example/go2/low_level/simulate/mujoco/v1
 python3 sim_walk_v1.0.py go2_sim_v1.0.yaml
-```
+````
 
-### Expected Behavior
+### Notes on Simulation Behavior
 
-* Robot stands symmetrically at default height
-* Forward walking gait emerges
-* Mild lateral drift to the **right** is expected
-* Over long horizons, trajectory may curve rightward
+* MuJoCo simulation includes **auxiliary stabilizers**
+  (roll, yaw-rate, lateral velocity, yaw integral)
+* These stabilizers are **not part of the policy**
+* They are applied post-policy for numerical stability and inspection
+* Hardware deployment does **not** use these stabilizers
 
-This behavior reflects **policy bias**, not a bug.
+Expected behavior:
+
+* Symmetric standing posture
+* Forward walking gait
+* Mild lateral drift to the right over long horizons
+
+This drift reflects **policy bias**, not a bug.
 
 ---
 
-## 8. Hardware Deployment (⚠️ Safety-Critical)
+## 10. Isaac Gym Simulation (Legacy)
+
+```
+simulate/gym/v1/gym_walk_v1.0.py
+```
+
+Purpose:
+
+* Legacy validation of a torque-trained policy
+* PD-based initialization and stabilization
+* **Not used for deployment**
+
+⚠️ This script exists for **historical comparison only**
+and should not be treated as the primary simulation pipeline.
+
+---
+
+## 11. Hardware Deployment (⚠️ Safety-Critical)
 
 ### Primary Script
 
@@ -191,7 +238,7 @@ This behavior reflects **policy bias**, not a bug.
 deploy/v1/dep_walk_v1.0.py
 ```
 
-### Experimental (Added Logging)
+### Experimental (Adds Logging)
 
 ```
 deploy/v1/dep_walk_v1.1.py
@@ -199,53 +246,53 @@ deploy/v1/dep_walk_v1.1.py
 
 ---
 
-### 8.1 Network Interface Selection
+### 11.1 Network Interface Selection
 
-Before deployment, identify the correct network interface:
+Identify the correct interface before deployment:
 
 ```
 ifconfig
 ```
 
-Example (Ethernet-connected Go2):
+Example:
 
 ```
 eno1: inet 192.168.123.222  netmask 255.255.255.0
 ```
 
-Use the interface name (e.g. `eno1`) when running deployment scripts.
-
 ❌ Using the wrong interface will cause DDS initialization failure.
 
 ---
 
-### 8.2 Required Robot State (MANDATORY)
+### 11.2 Required Robot State (MANDATORY)
 
 > **The robot must be SITTING before deployment.**
 
 The deployment script:
 
+* switches the robot into low-level mode
 * zeros motor torques
-* takes low-level control
+* ramps into the default pose
 
-🚫 **Never start deployment from a standing robot**
-unless the robot is **fully harnessed and lifted**.
+🚫 Never start deployment from a standing robot
+unless it is fully harnessed and lifted.
 
 ---
 
-### 8.3 Run Deployment
+### 11.3 Run Deployment
 
 ```
 cd example/go2/low_level/deploy/v1
 python3 dep_walk_v1.0.py eno1 go2_dep_v1.0.yaml
 ```
+
 ---
 
-### 8.4 Safe Shutdown Procedure
+### 11.4 Safe Shutdown
 
-1. **Primary (Recommended)**
+1. **Preferred**
    Press **SELECT** on the Unitree controller
-   → robot enters damping mode and sits down smoothly
+   → robot enters damping mode and sits down
 
 2. **Emergency**
 
@@ -253,66 +300,67 @@ python3 dep_walk_v1.0.py eno1 go2_dep_v1.0.yaml
    CTRL+C
    ```
 
-⚠️ Always:
+Always:
 
 * keep the robot harnessed
 * operate in open space
-* stand clear of legs during testing
+* stand clear of the legs
 
 ---
 
-## 9. Logging & Debugging
+## 12. Logging & Debugging
 
-* v1.1 scripts generate CSV logs
-* Used to:
+* `v1.1` scripts generate CSV logs
+* Logs are used to:
 
   * inspect pose symmetry
   * analyze gait patterns
   * debug PD–policy interaction
-* Logging does **not** change control behavior
+* Logging does **not** alter control behavior
 
 ---
 
-## 10. Known Sim-to-Real Gaps
+## 13. Known Sim-to-Real Gaps
 
-Be aware of the following **intentional mismatches**:
+Intentional mismatches include:
 
-* Policy trained **without hardware awareness**
-* MuJoCo has:
-
-  * idealized contacts
-  * implicit stabilizers
-  * symmetric mass distribution
+* Policy trained without hardware awareness
+* MuJoCo provides idealized contacts and symmetry
 * Hardware requires:
 
   * higher PD stiffness
   * careful damping
-  * compensation for asymmetry
+  * compensation for asymmetries
 
 As a result:
 
-* Standing in sim is easier than on hardware
-* Policy requires PD + stabilizer assistance to remain upright
+* Standing is easier in simulation
+* Hardware requires conservative tuning
 
-Future versions (`v2.x`) will address this via **hardware-informed training**.
+Future versions (`v2.x`) will address this via
+**hardware-informed training**.
 
 ---
 
-## 11. Final Notes
+## 14. Final Notes
 
-* YAML defines **control behavior**
-* Python scripts **bind everything together**
-* The policy itself is **fixed and opaque**
-* This stack prioritizes **safety and inspectability** over performance
+* YAML files define **control behavior**
+* Python scripts bind policy, control, and transport
+* Policies are **external artifacts** and not tracked in git
+* This stack prioritizes **safety, clarity, and inspectability**
+  over raw performance
 
-### Discarded / Reference Scripts
+### Reference / Deprecated Scripts
 
-- `deploy_policy.py`  
-  Deprecated and no longer used. Kept only for historical reference.
+* `deploy_policy.py`
+  Deprecated, kept only for historical reference
 
-- `go2_stand_example.py`  
-  Original Unitree SDK example. Not part of this control stack.
+* `go2_stand_example.py`
+  Original Unitree SDK example, not part of this stack
 
-- `path_utils.py`
-  Unified script for path definitions for simulation and deployment scripts.
+* `path_utils.py`
+  Centralized, deterministic path resolution utility
 
+```
+
+---
