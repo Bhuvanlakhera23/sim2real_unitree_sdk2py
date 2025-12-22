@@ -1,4 +1,3 @@
-```
 # Go2 Low-Level Control Stack (Simulation + Deployment)
 
 > ⚠️ **Research Sandbox — Use at Your Own Risk**  
