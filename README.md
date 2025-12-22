@@ -1,4 +1,3 @@
-```
 # Unitree Go2 — System Setup & SDK2 Communication Guide
 
 This repository provides a **system-level setup and communication stack**
