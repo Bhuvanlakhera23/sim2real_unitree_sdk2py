@@ -2,7 +2,6 @@
 
 This repository provides a **system-level setup and communication stack**
 for working with the **Unitree Go2** quadruped using:
-
 - **Unitree SDK2 (Python)** for low-level robot control
 - **CycloneDDS** for real-time communication
 - **ROS 2** (Humble on PC, Foxy on robot) for tooling and integration
