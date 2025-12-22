@@ -1,3 +1,11 @@
+"""
+LEGACY / REFERENCE ONLY
+
+Copied from Unitree SDK examples.
+Not part of the sim-to-real control stack.
+"""
+
+
 import time
 import sys
 
