@@ -251,7 +251,7 @@ ip a
 ### Installation
 
 ```
-git clone https://github.com/<your-org>/sim2real_unitree_sdk2py.git
+git clone https://github.com/Bhuvanlakhera23/sim2real_unitree_sdk2py.git
 cd sim2real_unitree_sdk2py
 python3 -m venv .venv
 source .venv/bin/activate

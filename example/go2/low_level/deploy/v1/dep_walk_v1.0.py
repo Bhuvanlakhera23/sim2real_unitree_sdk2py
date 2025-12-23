@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
 """
-Bare Bones Deployment Script for Go2 using a pre-trained policy:
+===============================================================================
+RAW POLICY DEPLOYMENT FOR UNITREE GO2 ROBOT: dep_walk_v1.0.py
+
+Description:
+This script deploys a pre-trained reinforcement learning policy directly
 - No stabilization or state estimation; direct policy inference.
 - Joint position commands with PD control.
 - No logging or data saving.
 
-CLI USAGE:
+Author: Bhuvan Lakhera
+Date: Dec 2025
+
+USAGE:
 python3 dep_walk_v1.0.py eno1 go2_dep_v1.0.yaml
+===============================================================================
 """
 
 import sys, os, time, argparse, numpy as np, torch, yaml, subprocess
@@ -19,17 +27,24 @@ from unitree_sdk2py.idl.default import (
     unitree_go_msg_dds__LowState_ as LowStateGo,
 )
 
-# ---------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Deterministic low_level root resolution (CWD-independent)
+# -----------------------------------------------------------------------------
 THIS_FILE = os.path.abspath(__file__)
-PROJECT_ROOT = os.path.abspath(
+
+LOW_LEVEL_ROOT = os.path.abspath(
     os.path.join(os.path.dirname(THIS_FILE), "..", "..")
 )
 
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
-# ---------------------------------------------------------------------------#
-CONFIG_DIR = os.path.join(PROJECT_ROOT, "config")
-POLICY_DIR = os.path.join(PROJECT_ROOT, "policies")
+if LOW_LEVEL_ROOT not in sys.path:
+    sys.path.insert(0, LOW_LEVEL_ROOT)
+
+from common.path_utils import (
+    get_deploy_config_path,
+    get_policy_path,
+)
+
+PROJECT_ROOT = LOW_LEVEL_ROOT
 
 # --------------------------------------------------------------------------- #
 # 🧩 LOCAL HELPERS
@@ -69,20 +84,18 @@ class Go2Deployer:
 
         # 3. Bare filename → assume config/deploy/v1
         else:
-            cfg_path = os.path.join(
-                CONFIG_DIR, "deploy", "v1", os.path.basename(cfg_arg)
+            cfg_path = get_deploy_config_path(
+                __file__,
+                "v1",
+                os.path.basename(cfg_arg),
             )
-
-        assert os.path.isfile(cfg_path), f"Config not found: {cfg_path}"
-
 
         with open(cfg_path, "r") as f:
             self.cfg = yaml.load(f, Loader=yaml.FullLoader)
 
         self.control_dt = float(self.cfg.get("control_dt", 0.02))
 
-        self.policy_path = os.path.join(POLICY_DIR, "policy_v1.pt")
-        assert os.path.isfile(self.policy_path), f"Policy not found: {self.policy_path}"
+        self.policy_path = get_policy_path(__file__, "policy_v1.pt")
 
 
         self.num_actions = int(self.cfg.get("num_actions", 12))
@@ -130,7 +143,10 @@ class Go2Deployer:
         self.remote = RemoteController()
 
         # ---------------- Policy ---------------- #
+        print(f"[INFO] Loading policy from: {self.policy_path}")
         self.policy = torch.jit.load(self.policy_path)
+        print("[INFO] Policy loaded successfully.")
+
 
         dummy_obs = np.zeros(self.num_obs, dtype=np.float32)
         with torch.no_grad():
@@ -140,8 +156,9 @@ class Go2Deployer:
                 .numpy()
                 .squeeze()
             )
-
+        print(f"[DEBUG] Policy neutral offset: {np.round(self.policy_neutral_offset,3)}")
         self._wait_for_state()
+        print("[INFO] Go2 ready for RAW policy control ✅")
 
     # ------------------------------------------------------------------- #
     def _on_lowstate(self, msg: LowStateGo):
@@ -149,8 +166,10 @@ class Go2Deployer:
         self.remote.set(self.low_state.wireless_remote)
 
     def _wait_for_state(self):
+        print("[INFO] Waiting for robot state...")
         while self.low_state.tick == 0:
             time.sleep(self.control_dt)
+        print("[INFO] Connected to Go2 state stream.")
 
     def _send_cmd(self):
         self.low_cmd.crc = CRC().Crc(self.low_cmd)
@@ -158,12 +177,14 @@ class Go2Deployer:
 
     # ------------------------------------------------------------------- #
     def zero_torque_state(self):
+        print("[STATE] Zero Torque — Press START to continue.")
         while self.remote.button[KeyMap.start] != 1:
             create_zero_cmd(self.low_cmd)
             self._send_cmd()
             time.sleep(self.control_dt)
 
     def move_to_default(self):
+        print("[STATE] Moving to default position (2 s ramp)...")
         steps = int(2.0 / self.control_dt)
         init_q = np.array(
             [self.low_state.motor_state[i].q for i in range(self.num_actions)],
@@ -179,8 +200,10 @@ class Go2Deployer:
                 self.low_cmd.motor_cmd[i].kd = float(self.kds[i])
             self._send_cmd()
             time.sleep(self.control_dt)
+        print("[STATE] Default stance reached ✅")
 
     def hold_default(self):
+        print("[STATE] Holding default position — Press A to start policy.")
         while self.remote.button[KeyMap.A] != 1:
             for i in range(self.num_actions):
                 self.low_cmd.motor_cmd[i].q = float(self.default_hw[i])
@@ -188,6 +211,7 @@ class Go2Deployer:
                 self.low_cmd.motor_cmd[i].kd = float(self.kds[i])
             self._send_cmd()
             time.sleep(self.control_dt)
+        print("[STATE] A pressed — running policy...")
 
     # ------------------------------------------------------------------- #
     def run_once(self):
@@ -252,6 +276,7 @@ class Go2Deployer:
     def shutdown(self):
         create_damping_cmd(self.low_cmd)
         self._send_cmd()
+        print("[INFO] Damping engaged — shutdown complete.")
 
 
 # --------------------------------------------------------------------------- #
@@ -267,6 +292,7 @@ if __name__ == "__main__":
         d.zero_torque_state()
         d.move_to_default()
         d.hold_default()
+        print("[RUN] Running raw policy loop — press SELECT to stop.")
         while d.remote.button[KeyMap.select] != 1:
             d.run_once()
     finally:

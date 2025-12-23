@@ -1,9 +1,20 @@
 #!/usr/bin/env python3
 """
-Go2 Deployment — Raw Policy (v1.1)
------------------------------------
+===============================================================================
+RAW POLICY DEPLOYMENT WITH CSV LOGGING FOR UNITREE GO2 ROBOT: dep_walk_v1.1.py
+
+Description:
+This script follows the same framework as dep_walk_v1.0.py but adds structured
+CSV logging at 50 Hz for post-deployment analysis. It deploys a pre-trained
+reinforcement learning policy directly to the Unitree Go2 robot without any
+stabilization or state estimation, using joint position commands with PD control.
+
+Author: Bhuvan Lakhera
+Date: Dec 2025
+
+USAGE:
 python3 dep_walk_v1.1.py eno1 go2_dep_v1.1.yaml
-Raw policy deployment with structured CSV logging.
+===============================================================================
 """
 
 import os
@@ -22,23 +33,30 @@ from datetime import datetime
 # Path resolution (robust, repo-anchored)
 # ---------------------------------------------------------------------------
 THIS_FILE = os.path.abspath(__file__)
-PROJECT_ROOT = os.path.abspath(
+LOW_LEVEL_ROOT = os.path.abspath(
     os.path.join(os.path.dirname(THIS_FILE), "..", "..")
 )
 
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+if LOW_LEVEL_ROOT not in sys.path:
+    sys.path.insert(0, LOW_LEVEL_ROOT)
 
-COMMON_DIR = os.path.join(PROJECT_ROOT, "common")
-CONFIG_DIR = os.path.join(PROJECT_ROOT, "config")
-POLICY_DIR = os.path.join(PROJECT_ROOT, "policies")
-DEBUG_DIR  = os.path.join(PROJECT_ROOT, "debug")
-PLOTS_DIR  = os.path.join(PROJECT_ROOT, "plots")
+from common.path_utils import (
+    get_project_root,
+    get_common_dir,
+    get_config_dir,
+    get_policy_dir,
+    get_deploy_dir,
+    get_deploy_config_path,
+)
 
-assert os.path.isdir(COMMON_DIR), f"Missing common/: {COMMON_DIR}"
-assert os.path.isdir(CONFIG_DIR), f"Missing config/: {CONFIG_DIR}"
-assert os.path.isdir(POLICY_DIR), f"Missing policies/: {POLICY_DIR}"
-assert os.path.isdir(DEBUG_DIR),  f"Missing debug/: {DEBUG_DIR}"
+PROJECT_ROOT = get_project_root(__file__)
+COMMON_DIR = get_common_dir(__file__)
+CONFIG_DIR = get_config_dir(__file__)
+POLICY_DIR = get_policy_dir(__file__)
+DEPLOY_DIR = get_deploy_dir(__file__)
+
+DEBUG_DIR = os.path.join(PROJECT_ROOT, "debug")
+PLOTS_DIR = os.path.join(PROJECT_ROOT, "plots")
 
 # ---------------------------------------------------------------------------
 # Unitree DDS
@@ -77,7 +95,7 @@ class Go2Deployer:
         # ------------------- Load Config ------------------- #
         cfg_path = os.path.abspath(cfg_path)
         if not os.path.isfile(cfg_path):
-            cfg_path = os.path.join(CONFIG_DIR, "deploy", "v1", os.path.basename(cfg_path))
+            cfg_path = get_deploy_config_path(__file__, "v1", os.path.basename(cfg_path))
 
         assert os.path.isfile(cfg_path), f"Config not found: {cfg_path}"
 

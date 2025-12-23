@@ -361,5 +361,3 @@ Future versions (`v2.x`) will address this via
   Centralized, deterministic path resolution utility
 
 ```
-
----
