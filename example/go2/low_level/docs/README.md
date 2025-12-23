@@ -106,12 +106,7 @@ low_level/
 
 The **policy interface is immutable**.
 
-See:  
-```
-
-docs/policy_contract.md
-
-```
+See: [policy_contract.md](policy_contract.md)
 
 This document defines:
 - Observation layout and normalization
