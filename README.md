@@ -11,7 +11,7 @@ for working with the **Unitree Go2** quadruped using:
 > Simulation, control logic, and sim-to-real deployment are documented separately.
 
 ➡️ **Low-Level Simulation & Deployment Stack (Core Research Code):**  
-[`example/go2/low_level/docs/README.md`](example/go2/low_level/docs/README.md)
+[`README.md`](example/go2/low_level/docs/README.md)
 
 ---
 
