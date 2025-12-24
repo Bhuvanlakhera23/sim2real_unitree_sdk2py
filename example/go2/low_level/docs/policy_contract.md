@@ -1,4 +1,4 @@
-📜 Go2 Locomotion Policy Contract (Sim ↔ Real)
+# 📜 Go2 Locomotion Policy Contract (Sim ↔ Real)
 
 Author: Bhuvan Lakhera
 Robot: Unitree Go2 (12-DoF)
@@ -6,7 +6,7 @@ Policy Type: RL locomotion policy (position-target output)
 Control Mode: Joint position PD
 Execution Rate: 50 Hz (policy), ≥500 Hz inner loop (sim / firmware)
 
-1. Purpose of This Document
+## 1. Purpose of This Document
 
 This document defines the non-negotiable interface contract between:
 
@@ -21,8 +21,8 @@ Any violation of this contract invalidates the policy and will result in unstabl
 This is not a config file.
 This is the ground truth specification.
 
-2. Policy I/O Definition (Immutable)
-2.1 Action Space (STRICT)
+## 2. Policy I/O Definition (Immutable)
+### 2.1 Action Space (STRICT)
 Property	Value
 num_actions	12
 Action range	[-1, 1] (normalized)
@@ -42,7 +42,7 @@ target_q = default_angles + action * action_scale
 ⚠️ The policy does not output torques.
 ⚠️ The policy does not know about PD gains.
 
-2.2 Observation Space (STRICT)
+### 2.2 Observation Space (STRICT)
 Property	Value
 num_obs	48
 Observation order	Fixed
@@ -62,7 +62,7 @@ Observation layout (index-accurate):
 ❌ Adding/removing/reordering entries breaks the policy
 ❌ Changing frames (world ↔ body) breaks the policy
 
-3. Normalization Constants (Frozen)
+## 3. Normalization Constants (Frozen)
 
 These values are part of the trained model, not tunables.
 
@@ -81,8 +81,8 @@ MuJoCo simulation
 
 hardware deployment
 
-4. Timing Contract
-4.1 Policy Timing (Immutable)
+## 4. Timing Contract
+### 4.1 Policy Timing (Immutable)
 Property	Value
 Policy rate	50 Hz
 Control period	0.02 s
@@ -96,7 +96,7 @@ no skipped steps
 
 no variable dt
 
-4.2 Inner Control Loop (Environment-dependent)
+### 4.2 Inner Control Loop (Environment-dependent)
 Environment	Inner Loop
 MuJoCo	dt = 0.002 s, decimation = 10
 Hardware	Firmware loop (~500 Hz)
@@ -104,7 +104,7 @@ Hardware	Firmware loop (~500 Hz)
 ✔ Inner loop may differ
 ❌ Policy rate must not
 
-5. Default Pose (Critical Reference)
+## 5. Default Pose (Critical Reference)
 default_angles:
   0.0, 0.80, -1.50,
   0.0, 0.80, -1.50,
@@ -122,7 +122,7 @@ assumed by the policy at reset
 
 ⚠️ Changing this requires retraining.
 
-6. PD Control Layer (OUTSIDE Policy)
+## 6. PD Control Layer (OUTSIDE Policy)
 
 The policy is PD-agnostic.
 
@@ -134,14 +134,15 @@ may be tuned for safety
 
 must remain stable and overdamped
 
-6.1 What PD Gains Affect
+### 6.1 What PD Gains Affect
 Effect	PD layer
 Tracking stiffness	✅
 Oscillation damping	✅
 Torque magnitude	✅
 Policy behavior	❌ (indirect only)
-7. Command Interface
-7.1 Command Semantics
+
+## 7. Command Interface
+### 7.1 Command Semantics
 cmd = [vx, vy, yaw_rate]
 
 
@@ -151,7 +152,7 @@ Continuous
 
 Assumed smooth
 
-7.2 Command Scaling
+### 7.2 Command Scaling
 Environment	cmd_scale
 Simulation	[2.0, 2.0, 0.25]
 Hardware	[0.9, 0.4, 0.25]
@@ -159,7 +160,7 @@ Hardware	[0.9, 0.4, 0.25]
 ✔ Scaling may differ
 ❌ Command ordering may not
 
-8. Allowed Modifications (Safe)
+## 8. Allowed Modifications (Safe)
 
 You may safely change:
 
@@ -177,7 +178,7 @@ logging / plotting
 
 camera behavior
 
-9. Forbidden Modifications (Policy-Breaking)
+## 9. Forbidden Modifications (Policy-Breaking)
 
 ❌ Changing observation order
 ❌ Changing normalization constants
@@ -188,7 +189,7 @@ camera behavior
 
 Any of the above invalidates all results.
 
-10. Versioning Rule
+## 10. Versioning Rule
 
 Each trained policy must be accompanied by:
 
@@ -201,7 +202,7 @@ the exact observation definition
 Policy ≠ file
 Policy = file + contract
 
-11. One-Line Summary (for collaborators)
+## 11. One-Line Summary (for collaborators)
 
 “If it touches observations, normalization, action semantics, or timing — retrain.
 If it touches PD, commands, or physics — tune.”
